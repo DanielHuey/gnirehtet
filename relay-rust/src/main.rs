@@ -191,7 +191,12 @@ impl Command for AutorunCommand {
     }
 
     fn execute(&self, args: &CommandLineArguments) -> Result<(), CommandExecutionError> {
-        cmd_autorun(args.dns_servers(), args.routes(), args.port())
+        cmd_autorun(
+            args.serial(),
+            args.dns_servers(),
+            args.routes(),
+            args.port(),
+        )
     }
 }
 
@@ -242,7 +247,7 @@ impl Command for AutostartCommand {
     }
 
     fn description(&self) -> &'static str {
-        "Listen for device connexions and start a client on every detected\n\
+        "Listen for device connections and start a client on every detected\n\
          device.\n\
          Accept the same parameters as the start command (excluding the\n\
          serial, which will be taken from the detected device)."
@@ -383,6 +388,7 @@ fn cmd_run(
 }
 
 fn cmd_autorun(
+    serial: Option<&str>,
     dns_servers: Option<&str>,
     routes: Option<&str>,
     port: u16,
@@ -398,6 +404,18 @@ fn cmd_autorun(
             }
         });
     }
+    let ctrlc_serial = serial.map(String::from);
+    ctrlc::set_handler(move || {
+        info!(target: TAG, "Interrupted");
+
+        let serial = ctrlc_serial.as_ref().map(String::as_ref);
+        if let Err(err) = cmd_stop(serial) {
+            error!(target: TAG, "Cannot stop client: {}", err);
+        }
+
+        exit(0);
+    })
+    .expect("Error setting Ctrl-C handler");
 
     cmd_relay(port)
 }
